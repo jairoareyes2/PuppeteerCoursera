@@ -1,0 +1,22 @@
+{
+  "name": "puppeteercoursera",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "faker": "^4.1.0",
+    "firebase": "^4.1.0",
+    "node-html-parser": "^6.1.13",
+    "playwright": "^0.11.1",
+    "puppeteer": "^22.7.0"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^8.4.1"
+  }
+}
