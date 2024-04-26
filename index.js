@@ -122,6 +122,7 @@ console.log(inputValues);
 
 //Get all anchors <a>
 async function scrapLinks(page){
+  console.log('Scraping links');
   const stories = await page.evaluate(() => {
     const anchors = Array.from(document.querySelectorAll('a'));
     const links = anchors.map(anchor => anchor.href);
@@ -150,7 +151,6 @@ async function recursiveExploration(page, link, depth, parentState){
     console.log(err);
     return;
   });
-
   let html = await getDOM(page);
   let parsedHtml = parser.parse(html);
   let body = parsedHtml.querySelector('body');
@@ -210,6 +210,7 @@ async function recursiveExploration(page, link, depth, parentState){
       //Taking screenshot of the current URL
       let imagePath = screenshots_directory + '/' + currentState + '.png';
       await page.screenshot({path: imagePath,fullPage: true});
+      const links = await scrapLinks(page);
 
       //Continue with the ripping process
       for(const newLink of links){
@@ -229,11 +230,33 @@ function slugify(stringUrl) {
   return stringUrl.replace(/[\/:]/g, '-');
 }
 
+function generateRandomString(length) {
+  let result = '';
+  let characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let charactersLength = characters.length;
+  for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  return result;
+}
+
+
 //Add listeners for crash events and console error messages
 async function addListeners(page){
   page.on('pageerror', (err) =>{
     err_name = err.toString();
-    let capture_path = screenshots_directory + err_name + '.png'
+    try {
+      let fullErrorMessage = {
+        'url' : page.url(),
+        'message' : err_name,
+      }
+      errors.push(fullErrorMessage);
+    } catch(error){
+      //Probably not an error  
+    }
+    var nameerror = "error_"+generateRandomString(10);
+    console.log('Error:' + err_name);
+    let capture_path = screenshots_directory +'/'+ nameerror + '.png'
     page.screenshot({path:capture_path});
   });
 
@@ -287,6 +310,13 @@ function deleteFolderRecursive(route) {
 
 //function to get the DOM structure from the page in String format
 async function getDOM(page){
+  /*const browser = await puppeteer.launch();
+  const pupipage = await browser.newPage();
+  console.log(page.url());
+  await pupipage.goto(page.url(), { waitUntil: 'networkidle0' }); // Espera hasta que no haya más solicitudes de red durante al menos 500 ms.
+  const content = await pupipage.content(); // Ahora deberías obtener todo el contenido, incluido el generado dinámicamente.
+  await browser.close();
+  return content;*/
   const html = await page.content().catch(err =>{
     return null;
   });
@@ -389,7 +419,7 @@ async function getButtons(page, elementList){
   let buttons = await page.$$('button');
   let button;
   for (let i = 0; i < buttons.length ; i++ ){
-    let disabled = page.evaluate((btn)=>{
+    let disabled = await page.evaluate((btn)=>{
       return typeof btn.getAttribute("disabled") === "string" || btn.getAttribute("aria-disabled") === "true";
     }, buttons[i]);
     if(!disabled){
@@ -433,13 +463,11 @@ async function interactWithObjects(elementList, page, currentState, link){
 
 // Method to interact with a single object depending on it's type
 async function interactWithObject(object, page, currentState, interactionNumber, link){
-  console.log("Interacting with object: " + object.type);
+  console.log("Interacting with object: " + object.element);
   if(object.type === 'input'){
     let elementHandle = object.element;
-    console.log("ELEMENT: " + elementHandle);
     let location = await  getCoordinates(elementHandle, page);
     if (location.x !== 0 && location.y !== 0 && location.width !== 0 && location.height !== 0){
-      console.log(`location.x = ${location.x}, location.y = ${location.y}, location.width = ${location.width}, location.height = ${location.height}`);
       await elementHandle.hover().catch(e =>{
         console.log('Could not hover to element');
       });
@@ -450,7 +478,6 @@ async function interactWithObject(object, page, currentState, interactionNumber,
           return el.id
         },elementHandle);
 
-        console.log("Before clicking...");
         //Try to find the elements with the ids indicated in the config file
         let index = ids.indexOf(id);
         if(index !== -1){
@@ -459,12 +486,12 @@ async function interactWithObject(object, page, currentState, interactionNumber,
           await page.keyboard.type(inputValues[index]);
         }
         else{
+          console.log("Filling input 491...");
           await fillInput(elementHandle, page);
         }
       }
       //TODO: What happens to inputs that are not specified on the config file?
       else{
-        console.log("Filling input...");
         await fillInput(elementHandle, page);
       }
       await page.evaluate(_ => {window.scrollTo(0,0)});
@@ -474,16 +501,21 @@ async function interactWithObject(object, page, currentState, interactionNumber,
     let elementHandle = object.element;
     let location = await  getCoordinates(elementHandle, page);
     if (location.x !== 0 && location.y !== 0 && location.width !== 0 && location.height !== 0){
-      //await elementScreenshot(location, currentState, page, beforeInteraction);
       await elementScreenshotwHandle(elementHandle, currentState, beforeInteraction);
 
       await elementHandle.hover().catch(e =>{
         console.log('Could not hover to element');
       });
-      console.log("CLIKING BUTTON");
+
+      // Omite hacer click en el elemento si tiene la clase 
+      const classList = await elementHandle.evaluate(el => el.className);
+      if (classList.includes(config.omit.clicks)) return;
+
+      console.log("CLIKING BUTTON: " + elementHandle);
       await elementHandle.click().catch(e =>{
         console.log('unclickable element');
       });
+      await page.waitForTimeout(1000); // Cambia el tiempo según lo necesario
       let html = await getDOM(page);
       if(!!html) {
 
@@ -652,40 +684,32 @@ async function fillInput(elementHandle, page){
   let type = await page.evaluate(el => {
     return el.type;
   }, elementHandle);
-  console.log("After evaluating FillInput");
+  console.log(`Filling ${type} element`)
   if(type === 'text'){
-    console.log("CLIKING ELEMENT TEXT");
-    elementHandle.click();
-    page.keyboard.type(faker.random.words());
+    await elementHandle.click();
+    await page.keyboard.type(faker.random.words());
   }
   else if(type === 'search'){
-    console.log("CLIKING ELEMENT SEARCH");
-    elementHandle.click();
-    page.keyboard.type(faker.random.alphaNumeric());
+    await elementHandle.click();
+    await page.keyboard.type(faker.random.alphaNumeric());
   }
   else if(type === 'password'){
-    console.log("CLIKING ELEMENT PASSWORD");
-    elementHandle.click();
-    page.keyboard.type(faker.internet.password()); 
+    await elementHandle.click();
+    await page.keyboard.type(config.values.passwordInput); 
   }
   else if(type === 'email'){
-    console.log("CLIKING ELEMENT EMAIL");
-    elementHandle.click();
-    page.keyboard.type(faker.internet.email());
+    await elementHandle.click();
+    await page.keyboard.type(config.values.emailInput);
   }
   else if (type === 'tel'){
-    console.log("CLIKING ELEMENT TEL");
-    elementHandle.click();
-    page.keyboard.type(faker.phone.phoneNumber()) ;
+    await elementHandle.click();
+    await page.keyboard.type(faker.phone.phoneNumber()) ;
   }
   else if (type === 'number'){
-    console.log("CLIKING ELEMENT NUMBER");
-    elementHandle.click();
-    page.keyboard.type(faker.random.number) ;
+    await elementHandle.click();
+    await page.keyboard.type(faker.random.number) ;
   }
   else if(type === 'submit' || type === 'radio' || type === 'checkbox'){
-    console.log("CLIKING ELEMENT SUBMIT, RADIO, CHECKBOX");
-    elementHandle.click();
+    await elementHandle.click();
   }
 }
-
