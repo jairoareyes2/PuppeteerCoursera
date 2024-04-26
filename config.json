@@ -1,12 +1,17 @@
 {
-    "url": "https://thesoftwaredesignlab.github.io",
-    "headless": true,
-    "depthLevels": 1,
-    "inputValues": false,
-    "values": {"userInput": "Mario",
-        "passwordInput": "123456",
-        "passwordTwoInput": "123456",
-        "nameInput": "Mario",
-        "emailInput": "mario@b.com"},
-    "browsers": ["firefox","chromium"]
+  "url": "http://localhost:3001",
+  "headless": true,
+  "depthLevels": 1,
+  "inputValues": false,
+  "values": {
+    "userInput": "Mario",
+    "passwordInput": "Pruebas123@",
+    "passwordTwoInput": "Pruebas123@",
+    "nameInput": "Mario",
+    "emailInput": "pruebas@pruebas.com"
+  },
+  "omit": {
+    "clicks": "forgotten-link"
+  },
+  "browsers": ["firefox"]
 }
