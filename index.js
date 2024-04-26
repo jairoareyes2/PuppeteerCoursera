@@ -61,10 +61,24 @@ console.log(inputValues);
       temp_directory = `${basePath}/temp` + b;
       graphFilenameRoot = `${basePath}/graph`;
       //Launch the current browser context
-      const browser = await playwright[b].launch({headless: headlessFlag, viewport: {width:viewportWidth, height:viewportHeight}});
+      const browser = await playwright[b].launch({
+        headless: headlessFlag,
+        ignoreHTTPSErrors: true,
+        b: {
+          args: [
+            "--disable-web-security",
+            "--user-data-dir=allow-insecure-localhost",
+            "--ignore-certificate-errors",
+            `--window-size=${viewportWidth},${viewportHeight}`,
+            "--no-sandbox",
+            "--allow-file-access-from-files"
+          ]
+        }
+      });
+
       const context = await browser.newContext();
       const page = await context.newPage();
-
+      
       //Make sure errors and console events are catched
       await addListeners(page);
       
@@ -132,10 +146,11 @@ async function recursiveExploration(page, link, depth, parentState){
     return;
   } 
   console.log("Exploring");
-  await page.goto(link, {waitUntil: 'networkidle2'}).catch((err)=>{
-    console.log(err); 
-    return; 
+  await page.goto(link, { waitUntil: 'load' }).catch((err) => {
+    console.log(err);
+    return;
   });
+
   let html = await getDOM(page);
   let parsedHtml = parser.parse(html);
   let body = parsedHtml.querySelector('body');
@@ -418,22 +433,28 @@ async function interactWithObjects(elementList, page, currentState, link){
 
 // Method to interact with a single object depending on it's type
 async function interactWithObject(object, page, currentState, interactionNumber, link){
+  console.log("Interacting with object: " + object.type);
   if(object.type === 'input'){
     let elementHandle = object.element;
+    console.log("ELEMENT: " + elementHandle);
     let location = await  getCoordinates(elementHandle, page);
     if (location.x !== 0 && location.y !== 0 && location.width !== 0 && location.height !== 0){
+      console.log(`location.x = ${location.x}, location.y = ${location.y}, location.width = ${location.width}, location.height = ${location.height}`);
       await elementHandle.hover().catch(e =>{
         console.log('Could not hover to element');
       });
       //Fill inputs with either random values or with the values indicated in the config file
       if(inputValuesFlag){
+        console.log("Before EVALUATE...");
         let id = await page.evaluate(el =>{
           return el.id
         },elementHandle);
 
+        console.log("Before clicking...");
         //Try to find the elements with the ids indicated in the config file
         let index = ids.indexOf(id);
         if(index !== -1){
+          console.log("CLIKING ELEMENT");
           await elementHandle.click();
           await page.keyboard.type(inputValues[index]);
         }
@@ -443,6 +464,7 @@ async function interactWithObject(object, page, currentState, interactionNumber,
       }
       //TODO: What happens to inputs that are not specified on the config file?
       else{
+        console.log("Filling input...");
         await fillInput(elementHandle, page);
       }
       await page.evaluate(_ => {window.scrollTo(0,0)});
@@ -458,6 +480,7 @@ async function interactWithObject(object, page, currentState, interactionNumber,
       await elementHandle.hover().catch(e =>{
         console.log('Could not hover to element');
       });
+      console.log("CLIKING BUTTON");
       await elementHandle.click().catch(e =>{
         console.log('unclickable element');
       });
@@ -509,6 +532,7 @@ async function interactWithObject(object, page, currentState, interactionNumber,
       let prevDOM = await getDOM(page);
       for(let i=0; i<options.length; i++){
         if(typeof options[i].getAttribute("disabled") !== "string"){ //i.e IF the option is enabled
+          console.log("CLIKING ELEMENT 2");
           await elementHandle.click();
           await options[i].click();
           let currentDOM = await getDOM(page);
@@ -628,31 +652,39 @@ async function fillInput(elementHandle, page){
   let type = await page.evaluate(el => {
     return el.type;
   }, elementHandle);
+  console.log("After evaluating FillInput");
   if(type === 'text'){
+    console.log("CLIKING ELEMENT TEXT");
     elementHandle.click();
     page.keyboard.type(faker.random.words());
   }
   else if(type === 'search'){
+    console.log("CLIKING ELEMENT SEARCH");
     elementHandle.click();
     page.keyboard.type(faker.random.alphaNumeric());
   }
   else if(type === 'password'){
+    console.log("CLIKING ELEMENT PASSWORD");
     elementHandle.click();
     page.keyboard.type(faker.internet.password()); 
   }
   else if(type === 'email'){
+    console.log("CLIKING ELEMENT EMAIL");
     elementHandle.click();
     page.keyboard.type(faker.internet.email());
   }
   else if (type === 'tel'){
+    console.log("CLIKING ELEMENT TEL");
     elementHandle.click();
     page.keyboard.type(faker.phone.phoneNumber()) ;
   }
   else if (type === 'number'){
+    console.log("CLIKING ELEMENT NUMBER");
     elementHandle.click();
     page.keyboard.type(faker.random.number) ;
   }
   else if(type === 'submit' || type === 'radio' || type === 'checkbox'){
+    console.log("CLIKING ELEMENT SUBMIT, RADIO, CHECKBOX");
     elementHandle.click();
   }
 }
